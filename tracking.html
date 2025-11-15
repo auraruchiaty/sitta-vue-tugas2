@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SITTA-UT - Tracking DO</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="icon" href="logo-ut-small-transparent-300x226.png.webp" type="image/x-icon">
+</head>
+<body>
+    <div id="app" v-cloak>
+
+        <div v-show="isLoading" class="loading-overlay">
+            <div class="loading-spinner"></div>
+            <p v-text="'Memuat data tracking...'"></p>
+        </div>
+
+        <header>
+            <nav>
+                <h1 v-text="'SITTA-UT'"></h1>
+                <ul>
+                    <li v-for="menu in menuList" :key="menu.name">
+                        <a :href="menu.link" :class="{ active: menu.isActive }" v-text="menu.name"></a>
+                    </li>
+                </ul>
+            </nav>
+        </header>
+        <main>
+            <div class="container">
+                <div class="form-section">
+                    <h2 v-text="'Tambah Delivery Order (DO) Baru'"></h2>
+                    <form @submit.prevent="addDO">
+                        <div class="form-group">
+                            <label v-text="'Nomor DO'"></label>
+                            <input type="text" :value="nextDONumber" disabled>
+                        </div>
+                        <div class="form-group">
+                            <label v-text="'NIM'"></label>
+                            <input type="text" v-model="newDO.nim" placeholder="Masukkan NIM">
+                        </div>
+                        <div class="form-group">
+                            <label v-text="'Nama Mahasiswa'"></label>
+                            <input type="text" v-model="newDO.nama" placeholder="Masukkan nama mahasiswa">
+                        </div>
+                        <div class="form-group">
+                            <label v-text="'Pilih Paket'"></label>
+                            <select v-model="selectedPaket">
+                                <option disabled value="">Pilih salah satu paket</option>
+                                <option v-for="pkg in paketList" :value="pkg.kode" v-text="pkg.nama"></option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label v-text="'Detail Paket'"></label>
+                            <div v-if="paketDetails" class="paket-details">
+                                <ul>
+                                    <li v-for="(item, index) in paketDetails.isi" :key="index" v-text="getItemName(item)"></li>
+                                </ul>
+                            </div>
+                            <div v-else-if="selectedPaket && !paketDetails" class="paket-details">
+                                <p style="color: var(--dark-gray); font-style: italic;">Paket tidak ditemukan</p>
+                            </div>
+                            <div v-else class="paket-details">
+                                <p style="color: var(--dark-gray); font-style: italic;">Pilih paket untuk melihat detail</p>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label v-text="'Total Harga'"></label>
+                            <input type="text" :value="formatCurrency(newDO.total)" disabled>
+                        </div>
+                        <div class="form-group">
+                            <label v-text="'Tanggal Kirim'"></label>
+                            <input type="date" v-model="newDO.tanggalKirim">
+                        </div>
+                        <div class="form-group">
+                            <label v-text="'Ekspedisi'"></label>
+                            <select v-model="newDO.ekspedisi">
+                                <option disabled value="">Pilih ekspedisi</option>
+                                <option v-for="(item, index) in pengirimanList" :value="item.nama" :key="index">
+                                    {{ item.nama }}
+                                </option>
+                            </select>
+                        </div>
+                        <button type="submit" class="btn btn-primary" style="width: 100%;" :disabled="isSubmitting">
+                            <span>📦</span> 
+                            <span v-show="!isSubmitting" v-text="'Tambah DO'"></span>
+                            <span v-show="isSubmitting" v-text="'Menambahkan...'"></span>
+                        </button>
+                    </form>
+                </div>
+                <div class="list-section">
+                    <h2 v-text="'Daftar Delivery Order'"></h2>
+                    <div v-if="Object.keys(tracking).length === 0" class="empty-state">
+                        <p v-text="'Belum ada data Delivery Order'"></p>
+                    </div>
+                    <div v-else>
+                        <div v-for="(doItem, doNumber) in tracking" :key="doNumber" class="do-card" @click="openDetailsModal(doItem)">
+                            <h3 v-text="doNumber"></h3>
+                            <p><strong v-text="'Nama:'"></strong> {{ doItem.nama }}</p>
+                            <p><strong v-text="'Status:'"></strong> 
+                                <span :class="getStatusClass(doItem.status)" v-text="doItem.status"></span>
+                            </p>
+                            <p><strong v-text="'Tanggal Kirim:'"></strong> {{ doItem.tanggalKirim }}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Details Modal -->
+            <div v-show="isDetailsModalOpen" class="modal-backdrop" @click.self="closeDetailsModal">
+                <div class="modal">
+                    <h2 v-text="'Detail DO: ' + selectedDO.doNumber"></h2>
+                    <p><strong v-text="'NIM:'"></strong> {{ selectedDO.nim }}</p>
+                    <p><strong v-text="'Nama:'"></strong> {{ selectedDO.nama }}</p>
+                    <p><strong v-text="'Status:'"></strong> {{ selectedDO.status }}</p>
+                    <p><strong v-text="'Ekspedisi:'"></strong> {{ selectedDO.ekspedisi }}</p>
+                    <p><strong v-text="'Tanggal Kirim:'"></strong> {{ selectedDO.tanggalKirim }}</p>
+                    <p><strong v-text="'Total Bayar:'"></strong> {{ formatCurrency(selectedDO.total) }}</p>
+                    <h4 v-text="'Riwayat Perjalanan'"></h4>
+                    <ul>
+                        <li v-for="(journey, index) in selectedDO.perjalanan" :key="index">
+                            <strong>{{ journey.waktu }}:</strong> {{ journey.keterangan }}
+                        </li>
+                    </ul>
+                    <div class="modal-actions">
+                        <button class="btn btn-secondary" type="button" @click="closeDetailsModal" v-text="'Tutup'"></button>
+                    </div>
+                </div>
+            </div>
+        </main>
+        <footer>
+            <p v-text="'Created by Aura'"></p>
+        </footer>
+    </div>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="js/dataBahanAjar.js"></script>
+    <script src="js/tracking-app.js"></script>
+</body>
+</html>

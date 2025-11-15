@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SITTA-UT - Stok Bahan Ajar</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="icon" href="logo-ut-small-transparent-300x226.png.webp" type="image/x-icon">
+</head>
+<body>
+    <div id="app" v-cloak>
+
+        <div v-if="isLoading" class="loading-overlay">
+            <div class="loading-spinner"></div>
+            <p>Memuat data stok...</p>
+        </div>
+
+        <header>
+            <nav>
+                <h1>SITTA-UT</h1>
+                <ul>
+                    <li><a href="index.html">Home</a></li>
+                    <li><a href="stok.html" class="active">Stok Bahan Ajar</a></li>
+                    <li><a href="tracking.html">Tracking DO</a></li>
+                </ul>
+            </nav>
+        </header>
+        <main>
+            <div class="toolbar">
+                <h2>Manajemen Stok Bahan Ajar</h2>
+                <button class="btn btn-primary" @click="openModal(true)">
+                    <span>➕</span> Tambah Stok
+                </button>
+            </div>
+            
+            <div class="filters">
+                <select v-model="filters.upbjj" @change="resetKategoriFilter">
+                    <option value="">Semua UPBJJ</option>
+                    <option v-for="upbjj in upbjjList" :value="upbjj">{{ upbjj }}</option>
+                </select>
+                
+                <select v-model="filters.kategori">
+                    <option value="">Semua Kategori</option>
+                    <option v-for="kategori in kategoriList" :value="kategori">{{ kategori }}</option>
+                </select>
+                
+                <select v-model="filters.status">
+                    <option value="">Semua Status</option>
+                    <option value="Aman">Aman</option>
+                    <option value="Menipis">Menipis</option>
+                    <option value="Kosong">Kosong</option>
+                </select>
+                
+                <select v-model="sort.by">
+                    <option value="judul">Judul</option>
+                    <option value="qty">Stok</option>
+                    <option value="harga">Harga</option>
+                </select>
+                
+                <button class="btn" @click="sort.order = sort.order === 'asc' ? 'desc' : 'asc'">
+                    {{ sort.order === 'asc' ? '▲' : '▼' }}
+                </button>
+            </div>
+            
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Kode</th>
+                            <th>Judul</th>
+                            <th>Kategori</th>
+                            <th>UPBJJ</th>
+                            <th>Rak</th>
+                            <th>Harga</th>
+                            <th>Stok</th>
+                            <th>Safety</th>
+                            <th>Status</th>
+                            <th>Catatan</th>
+                            <th>Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="item in filteredAndSortedStok" :key="item.kode">
+                            <td>{{ item.kode }}</td>
+                            <td>{{ item.judul }}</td>
+                            <td>{{ item.kategori }}</td>
+                            <td>{{ item.upbjj }}</td>
+                            <td>{{ item.lokasiRak }}</td>
+                            <td>{{ formatCurrency(item.harga) }}</td>
+                            <td>{{ item.qty }}</td>
+                            <td>{{ item.safety }}</td>
+                            <td>
+                                <span :class="getStatusClass(item)">
+                                    {{ getStatusText(item) }}
+                                </span>
+                            </td>
+                            <td v-html="item.catatanHTML"></td>
+                            <td>
+                                <div class="action-buttons">
+                                    <button class="btn btn-secondary" @click="openModal(false, item)">Edit</button>
+                                    <button class="btn btn-danger" @click="deleteStok(item.kode)">Hapus</button>
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div v-if="!isLoading && filteredAndSortedStok.length === 0" class="empty-state">
+                <p>Tidak ada data stok yang ditemukan</p>
+            </div>
+
+            <div v-if="isModalOpen" class="modal-backdrop">
+                <div class="modal">
+                    <h2>{{ isNew ? 'Tambah Stok Baru' : 'Edit Stok' }}</h2>
+                    <form @submit.prevent="saveStok">
+                        <div class="form-group">
+                            <label>Kode</label>
+                            <input type="text" v-model="currentItem.kode" :disabled="!isNew">
+                        </div>
+                        <div class="form-group">
+                            <label>Judul</label>
+                            <input type="text" v-model="currentItem.judul">
+                        </div>
+                        <div class="form-group">
+                            <label>Kategori</label>
+                            <select v-model="currentItem.kategori">
+                                <option value="">Pilih Kategori</option>
+                                <option v-for="kategori in kategoriList" :value="kategori">{{ kategori }}</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>UPBJJ</label>
+                            <select v-model="currentItem.upbjj">
+                                <option value="">Pilih UPBJJ</option>
+                                <option v-for="upbjj in upbjjList" :value="upbjj">{{ upbjj }}</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Lokasi Rak</label>
+                            <input type="text" v-model="currentItem.lokasiRak">
+                        </div>
+                        <div class="form-group">
+                            <label>Harga</label>
+                            <input type="number" v-model.number="currentItem.harga" min="0">
+                        </div>
+                        <div class="form-group">
+                            <label>Qty</label>
+                            <input type="number" v-model.number="currentItem.qty" min="0">
+                        </div>
+                        <div class="form-group">
+                            <label>Safety</label>
+                            <input type="number" v-model.number="currentItem.safety" min="0">
+                        </div>
+                        <div class="form-group">
+                            <label>Catatan (HTML)</label>
+                            <textarea v-model="currentItem.catatanHTML" rows="3"></textarea>
+                        </div>
+                        <div class="modal-actions">
+                            <button class="btn btn-primary" type="submit">Simpan</button>
+                            <button class="btn btn-secondary" type="button" @click="closeModal">Batal</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </main>
+        <footer>
+            <p>Created by Aura</p>
+        </footer>
+    </div>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="js/dataBahanAjar.js"></script>
+    <script src="js/stok-app.js"></script>
+</body>
+</html>
